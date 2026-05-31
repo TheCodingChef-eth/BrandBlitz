@@ -64,6 +64,16 @@ services:
         limits:
           memory: 256m
 
+  deposit-monitor:
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          memory: 128m
+
   web:
     restart: unless-stopped
     deploy:
