@@ -119,11 +119,7 @@ export default function BrandAnalyticsPage() {
   }, [apiToken, status, router, brandId]);
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="animate-pulse text-[var(--muted-foreground)]">Loading...</div>
-      </div>
-    );
+    return null;
   }
 
   if (!brand) {

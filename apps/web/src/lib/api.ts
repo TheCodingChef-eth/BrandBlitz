@@ -1,5 +1,6 @@
 import axios from "axios";
 import type { AxiosInstance } from "axios";
+import { z } from "zod";
 
 let BASE_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -23,12 +24,31 @@ try {
 }
 
 export function createApiClient(token?: string): AxiosInstance {
-  return axios.create({
+  const client = axios.create({
     baseURL: BASE_URL,
     withCredentials: true,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     timeout: 10_000,
   });
+
+  if (token && typeof window !== "undefined") {
+    client.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        if (
+          axios.isAxiosError(error) &&
+          error.response?.status === 401 &&
+          !error.config?.url?.startsWith("/auth/")
+        ) {
+          const { signOut } = await import("next-auth/react");
+          await signOut({ callbackUrl: "/login" });
+        }
+        return Promise.reject(error);
+      }
+    );
+  }
+
+  return client;
 }
 
 // Unauthenticated client for public endpoints
@@ -83,6 +103,22 @@ export interface LeaderboardEntry {
   totalScore: number;
   totalEarned?: string;
   endedAt: string | null;
+}
+
+const LeaderboardEntrySchema = z.object({
+  rank: z.number(),
+  userId: z.string().optional(),
+  username: z.string(),
+  displayName: z.string().optional(),
+  league: z.enum(["bronze", "silver", "gold"]).nullable().optional(),
+  avatarUrl: z.string().nullable(),
+  totalScore: z.number(),
+  totalEarned: z.string().optional(),
+  endedAt: z.string().nullable(),
+});
+
+export function parseLeaderboardEntries(data: unknown): LeaderboardEntry[] {
+  return z.array(LeaderboardEntrySchema).parse(data);
 }
 
 export interface UserProfile {
