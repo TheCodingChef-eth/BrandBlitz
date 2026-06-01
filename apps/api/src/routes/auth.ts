@@ -31,6 +31,7 @@ function serializeUser(user: {
   username?: string | null;
   avatar_url?: string | null;
   role?: string | null;
+  status?: string | null;
 }) {
   return {
     id: user.id,
@@ -39,6 +40,7 @@ function serializeUser(user: {
     username: user.username ?? null,
     avatarUrl: user.avatar_url ?? null,
     role: (user as any).role ?? "player",
+    status: (user as any).status ?? "active",
   };
 }
 

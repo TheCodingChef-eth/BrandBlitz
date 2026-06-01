@@ -13,6 +13,7 @@ import {
 } from "../db/queries/sessions";
 import { calculateRoundScore, validateAnswer } from "../services/scoring";
 import { authenticate } from "../middleware/authenticate";
+import { requireActiveUser } from "../middleware/require-active-user";
 import {
   enforceOneSessionPerChallenge,
   validateReactionTime,
@@ -39,6 +40,7 @@ const AnswerSchema = z.object({
 router.post(
   "/:challengeId/warmup-start",
   authenticate,
+  requireActiveUser,
   validateDeviceFingerprint,
   async (req, res) => {
     const challenge = await getChallengeById(req.params.challengeId);
@@ -105,6 +107,7 @@ router.post("/:challengeId/warmup-complete", authenticate, async (req, res) => {
 router.post(
   "/:challengeId/start",
   authenticate,
+  requireActiveUser,
   challengeStartLimiter,
   enforceOneSessionPerChallenge,
   async (req, res) => {

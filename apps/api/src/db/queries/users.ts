@@ -9,6 +9,10 @@ export interface User {
   username: string | null;
   avatar_url: string | null;
   role: string;
+  status: "active" | "suspended";
+  suspension_reason: string | null;
+  suspended_at: string | null;
+  suspended_by: string | null;
   phone_hash: string | null;
   phone_verified: boolean;
   phone_verified_at: string | null;
@@ -295,4 +299,94 @@ export async function restoreUser(userId: string): Promise<void> {
  */
 export async function hardDeleteUser(userId: string): Promise<void> {
   await query("DELETE FROM users WHERE id = $1 /* include_deleted */", [userId]);
+}
+
+/**
+ * Suspend a user account. Sets status to 'suspended' with a reason.
+ * Closes #140
+ */
+export async function suspendUser(
+  userId: string,
+  reason: string,
+  adminId: string,
+): Promise<User | null> {
+  const result = await query<User>(
+    `UPDATE users
+     SET status = 'suspended',
+         suspension_reason = $2,
+         suspended_at = NOW(),
+         suspended_by = $3,
+         updated_at = NOW()
+     WHERE id = $1 AND deleted_at IS NULL
+     RETURNING *`,
+    [userId, reason, adminId],
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
+ * Unsuspend a previously suspended user account.
+ */
+export async function unsuspendUser(userId: string): Promise<User | null> {
+  const result = await query<User>(
+    `UPDATE users
+     SET status = 'active',
+         suspension_reason = NULL,
+         suspended_at = NULL,
+         suspended_by = NULL,
+         updated_at = NOW()
+     WHERE id = $1 AND deleted_at IS NULL
+     RETURNING *`,
+    [userId],
+  );
+  return result.rows[0] ?? null;
+}
+
+/**
+ * List users with optional status filter and search.
+ * Used by the admin suspension dashboard.
+ */
+export async function listUsers(opts: {
+  status?: "active" | "suspended";
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ users: User[]; total: number }> {
+  const { status, search, page = 1, pageSize = 20 } = opts;
+  const conditions: string[] = ["deleted_at IS NULL"];
+  const params: (string | number)[] = [];
+  let paramIdx = 1;
+
+  if (status) {
+    conditions.push(`status = $${paramIdx}`);
+    params.push(status);
+    paramIdx++;
+  }
+
+  if (search?.trim()) {
+    conditions.push(
+      `(display_name ILIKE $${paramIdx} OR email ILIKE $${paramIdx} OR username ILIKE $${paramIdx})`,
+    );
+    params.push(`%${search.trim()}%`);
+    paramIdx++;
+  }
+
+  const where = conditions.join(" AND ");
+  const offset = (page - 1) * pageSize;
+
+  const countResult = await query<{ count: string }>(
+    `SELECT COUNT(*) AS count FROM users WHERE ${where}`,
+    params,
+  );
+  const total = parseInt(countResult.rows[0]?.count ?? "0", 10);
+
+  const dataParams = [...params, pageSize, offset];
+  const result = await query<User>(
+    `SELECT * FROM users WHERE ${where}
+     ORDER BY suspended_at DESC NULLS LAST, created_at DESC
+     LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+    dataParams,
+  );
+
+  return { users: result.rows, total };
 }
