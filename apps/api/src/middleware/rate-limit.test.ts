@@ -6,6 +6,7 @@ import {
   apiLimiter,
   authLimiter,
   challengeStartLimiter,
+  normalizeClientIp,
   uploadLimiter,
 } from "./rate-limit";
 
@@ -148,6 +149,15 @@ describe("uploadLimiter — 20 req / 1 h", () => {
 // ─── Key derivation ────────────────────────────────────────────────────────────
 
 describe("key derivation", () => {
+  it("normalizes IPv6 addresses to their /64 prefix and preserves IPv4 addresses", () => {
+    expect(normalizeClientIp("203.0.113.42")).toBe("203.0.113.42");
+    expect(normalizeClientIp("2001:db8:abcd:ef12::1")).toBe("2001:db8:abcd:ef12::/64");
+    expect(normalizeClientIp("2001:0db8:abcd:ef12:0000:0000:0000:abcd")).toBe(
+      "2001:db8:abcd:ef12::/64"
+    );
+    expect(normalizeClientIp("::ffff:192.0.2.10")).toBe("192.0.2.10");
+  });
+
   it("unauthenticated requests from the same IP share a bucket", async () => {
     const ip = nextIp();
     const app = makeApp(challengeStartLimiter); // max=5, easy to exhaust
@@ -170,6 +180,19 @@ describe("key derivation", () => {
     // Different IP, same user — should still be rate-limited
     const blocked = await request(app).get("/").set("X-Forwarded-For", ip2);
     expect(blocked.status).toBe(429);
+  });
+
+  it("counts rotated IPv6 addresses inside the same /64 together", async () => {
+    const app = makeApp(challengeStartLimiter);
+    const responses = [];
+
+    for (let i = 0; i < 100; i++) {
+      const ip = `2001:db8:abcd:${keySeq.toString(16)}::${i.toString(16)}`;
+      responses.push(await request(app).get("/").set("X-Forwarded-For", ip));
+    }
+
+    expect(responses.filter((res) => res.status === 200)).toHaveLength(5);
+    expect(responses.filter((res) => res.status === 429)).toHaveLength(95);
   });
 
   it("two different authenticated users get independent buckets", async () => {
