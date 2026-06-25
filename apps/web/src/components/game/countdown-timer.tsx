@@ -17,11 +17,11 @@ interface CountdownTimerProps {
   /** Called each second when countdown is ≤5 s for tick sound. */
   onTick?: () => void;
   className?: string;
+  paused?: boolean;
 }
 
-export function CountdownTimer({ durationSeconds, deadlineAt, onExpire, onTick, className }: CountdownTimerProps) {
-  const { timeLeftMs } = useCountdown({ durationSeconds, deadlineAt, onExpire });
-  const prevSecondsRef = React.useRef(Math.ceil(timeLeftMs / 1000));
+export function CountdownTimer({ durationSeconds, deadlineAt, onExpire, className, paused = false }: CountdownTimerProps) {
+  const { timeLeftMs } = useCountdown({ durationSeconds, deadlineAt, onExpire, paused });
 
   const seconds = Math.ceil(timeLeftMs / 1000);
   const totalMs = Math.max(durationSeconds, 1) * 1000;
