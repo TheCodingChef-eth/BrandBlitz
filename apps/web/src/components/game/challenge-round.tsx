@@ -7,6 +7,7 @@ import { CountdownTimer } from "./countdown-timer";
 import { ROUND_SECONDS } from "./constants";
 import type { ChallengeQuestion } from "@/lib/api";
 import { AnswerOption, type AnswerOptionKey } from "./answer-option";
+import { useKeyboardAnswers } from "@/hooks/use-keyboard-answers";
 
 export interface ChallengeAnswerState {
   selectedOption: AnswerOptionKey | null;
@@ -77,35 +78,10 @@ export function ChallengeRound({
     onAnswer(option, reactionTimeMs);
   }, [answered, disabled, onAnswer]);
 
-  useEffect(() => {
-    if (answered) return;
-
-    const keyToOption: Record<string, "A" | "B" | "C" | "D" | undefined> = {
-      a: "A",
-      b: "B",
-      c: "C",
-      d: "D",
-      1: "A",
-      2: "B",
-      3: "C",
-      4: "D",
-    };
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const tag = target?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || target?.isContentEditable) return;
-
-      const opt = keyToOption[event.key.toLowerCase()];
-      if (!opt) return;
-
-      event.preventDefault();
-      handleSelect(opt);
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [answered, handleSelect]);
+  useKeyboardAnswers({
+    onAnswer: handleSelect,
+    disabled: answered || disabled,
+  });
 
   const handleTimeExpire = () => {
     if (!answered && !disabled) {
