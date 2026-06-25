@@ -15,7 +15,7 @@ import { createPayout, updatePayoutStatus } from "../db/queries/payouts";
 import { incrementUserEarnings } from "../db/queries/users";
 import { rankWinners } from "./scoring";
 import { calculatePayoutShareStroops, stroopsToUsdc } from "../lib/usdc";
-import { payoutJobOptions, payoutQueue } from "../queues/payout.queue";
+import { enqueuePayoutJob } from "../queues/payout.queue";
 import { enqueueLeaderboardRefresh } from "../queues/leaderboard-refresh.queue";
 import { logger } from "../lib/logger";
 import { metrics } from "../lib/metrics";
@@ -28,8 +28,7 @@ import { queueReferralBonusForPayout } from "./referrals";
  * Enqueue a payout job for a completed challenge.
  * The actual Stellar transactions are processed by the BullMQ worker.
  */
-export async function enqueuePayout(challengeId: string, requestId?: string): Promise<void> {
-  await payoutQueue.add("process-payout", { challengeId, requestId }, payoutJobOptions);
+
   await enqueueLeaderboardRefresh(challengeId);
   logger.info("Payout job enqueued", { challengeId, requestId });
 }
