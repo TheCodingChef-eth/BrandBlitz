@@ -87,6 +87,7 @@ export function ChallengePage({ params }: Props) {
   const [answerError, setAnswerError] = React.useState<string | null>(null);
   const [answerState, setAnswerState] = React.useState<ChallengeAnswerState | null>(null);
   const [recoverySession, setRecoverySession] = React.useState<RecoverySessionResponse | null>(null);
+  const [showTooltip, setShowTooltip] = React.useState(false);
 
   const mountedRef = React.useRef(true);
   const currentRoundRef = React.useRef(currentRound);
@@ -167,6 +168,33 @@ export function ChallengePage({ params }: Props) {
       cancelled = true;
     };
   }, [apiToken, challengeId, router, status]);
+
+  React.useEffect(() => {
+    if (phase !== "challenge") return;
+    if (typeof window === "undefined") return;
+    const dismissed = window.localStorage.getItem("brandblitz:keyboard-tooltip-dismissed");
+    if (!dismissed) {
+      setShowTooltip(true);
+    }
+  }, [phase]);
+
+  React.useEffect(() => {
+    if (!showTooltip) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowTooltip(false);
+        try { window.localStorage.setItem("brandblitz:keyboard-tooltip-dismissed", "1"); } catch {}
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [showTooltip]);
+
+  const dismissTooltip = React.useCallback(() => {
+    setShowTooltip(false);
+    try { window.localStorage.setItem("brandblitz:keyboard-tooltip-dismissed", "1"); } catch {}
+  }, []);
 
   const handleWarmupComplete = async (challengeToken: string) => {
     if (!apiToken) return;
@@ -357,6 +385,23 @@ export function ChallengePage({ params }: Props) {
 
     return (
       <div className="min-h-screen p-6 pt-16">
+        {showTooltip && (
+          <div
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--background)] px-5 py-3 shadow-lg text-sm"
+            role="tooltip"
+            aria-label="Keyboard shortcut hint"
+          >
+            <kbd className="hidden md:inline-flex h-5 w-5 items-center justify-center rounded border border-[var(--border)] bg-[var(--muted)] text-xs font-bold text-[var(--muted-foreground)]" aria-hidden="true">⌨</kbd>
+            <span>Use <kbd className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded border border-[var(--border)] bg-[var(--muted)] px-1 text-xs font-bold" aria-hidden="true">A</kbd>/<kbd className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded border border-[var(--border)] bg-[var(--muted)] px-1 text-xs font-bold" aria-hidden="true">B</kbd>/<kbd className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded border border-[var(--border)] bg-[var(--muted)] px-1 text-xs font-bold" aria-hidden="true">C</kbd>/<kbd className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded border border-[var(--border)] bg-[var(--muted)] px-1 text-xs font-bold" aria-hidden="true">D</kbd> keys to answer faster</span>
+            <button
+              onClick={dismissTooltip}
+              className="ml-2 rounded-md p-1 text-[var(--muted-foreground)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
+              aria-label="Dismiss"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        )}
         <OfflineBanner blocking />
         <ChallengeRound
           question={question}

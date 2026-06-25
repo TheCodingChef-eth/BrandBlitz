@@ -41,7 +41,7 @@ export function AnswerOption({
       aria-label={`${option}: ${label}`}
       aria-pressed={selected}
     >
-      <kbd className="mr-3 inline-flex h-6 min-w-6 items-center justify-center rounded border border-[var(--border)] bg-[var(--muted)] px-1 font-bold text-[var(--muted-foreground)]">
+      <kbd className="mr-3 inline-flex h-6 min-w-6 items-center justify-center rounded border border-[var(--border)] bg-[var(--muted)] px-1 font-bold text-[var(--muted-foreground)] max-md:hidden" aria-hidden="true">
         {option}
       </kbd>
       <span className="min-w-0 flex-1 truncate">{label}</span>
