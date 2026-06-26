@@ -90,6 +90,10 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   // Inject nonce into response headers for use in layout/components
   response.headers.set("x-nonce", nonce);
 
+  // Prevent browsers from pre-resolving hostnames found in page content.
+  // DNS prefetch can leak back-end infrastructure topology to network observers.
+  response.headers.set("X-DNS-Prefetch-Control", "off");
+
   // Set CSP header in Report-Only mode
   // After 7 days of monitoring violations, switch to enforce mode by removing "-Report-Only"
   const cspHeader = buildCSPHeader(nonce);
