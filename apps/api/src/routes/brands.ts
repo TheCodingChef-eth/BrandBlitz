@@ -14,7 +14,7 @@ import {
   deleteBrand,
   getBrandChallengeStats,
 } from "../db/queries/brands";
-import { getBrandAnalytics } from "../db/queries/analytics";
+import { getBrandAnalytics, getBrandBenchmark, BUCKET_LABELS } from "../db/queries/analytics";
 import {
   createChallenge,
   insertChallengeQuestions,
@@ -331,8 +331,40 @@ router.get("/:id/analytics", authenticate, async (req, res) => {
   }
 
   const cacheKey = `brand_analytics:${brand.id}:${fromParam || "all"}:${toParam || "all"}`;
-  const analytics = await withCoalescing(cacheKey, 900, () => getBrandAnalytics(brand.id, from, to));
+  const analytics = await withCoalescing(cacheKey, 900, () =>
+    getBrandAnalytics(brand.id, from, to)
+  );
   res.json({ analytics });
+});
+
+/**
+ * GET /brands/:id/benchmark
+ * Anonymized benchmark comparison: the brand's completion rate and
+ * cost-per-session next to platform-wide medians for its size bucket.
+ *
+ * Only aggregate medians are returned — individual competitor brand data is
+ * never exposed. Brands with fewer than BENCHMARK_MIN_CHALLENGES challenges
+ * are excluded from the platform medians (statistical noise guard) and get
+ * `platform.sampleSize === 0` until they qualify.
+ */
+router.get("/:id/benchmark", authenticate, async (req, res) => {
+  const brand = await getBrandById(req.params.id);
+  if (!brand) throw createError("Brand not found", 404);
+  if (brand.owner_user_id !== req.user!.sub) throw createError("Forbidden", 403);
+
+  const benchmark = await withCoalescing(`brand_benchmark:${brand.id}`, 900, () =>
+    getBrandBenchmark(brand.id)
+  );
+
+  res.json({
+    benchmark: {
+      ...benchmark,
+      platform: {
+        ...benchmark.platform,
+        bucketLabel: BUCKET_LABELS[benchmark.platform.sizeBucket],
+      },
+    },
+  });
 });
 
 /**
@@ -623,33 +655,35 @@ const RecurrenceRuleSchema: z.ZodType<RecurrenceRule> = z.enum([
   "custom",
 ]);
 
-const ChallengeTemplateSchema = z.object({
-  poolAmountUsdc: z
-    .string()
-    .regex(/^\d+(\.\d{1,7})?$/)
-    .refine(
-      (val) => {
-        const stroops = Math.round(parseFloat(val) * 10_000_000);
-        return stroops >= MIN_POOL_STROOPS;
-      },
-      {
-        message: `Pool amount must be at least 100 USDC (${MIN_POOL_STROOPS.toLocaleString()} stroops)`,
-      }
-    ),
-  maxPlayers: z.number().int().positive().optional(),
-  durationHours: z.number().int().min(1),
-  recurrenceRule: RecurrenceRuleSchema,
-  recurrenceCron: z.string().optional(),
-  recurrenceTimezone: z.string().optional(),
-}).superRefine((val, ctx) => {
-  if (val.recurrenceRule === "custom" && !val.recurrenceCron) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "recurrenceCron is required for custom recurrence rule",
-      path: ["recurrenceCron"],
-    });
-  }
-});
+const ChallengeTemplateSchema = z
+  .object({
+    poolAmountUsdc: z
+      .string()
+      .regex(/^\d+(\.\d{1,7})?$/)
+      .refine(
+        (val) => {
+          const stroops = Math.round(parseFloat(val) * 10_000_000);
+          return stroops >= MIN_POOL_STROOPS;
+        },
+        {
+          message: `Pool amount must be at least 100 USDC (${MIN_POOL_STROOPS.toLocaleString()} stroops)`,
+        }
+      ),
+    maxPlayers: z.number().int().positive().optional(),
+    durationHours: z.number().int().min(1),
+    recurrenceRule: RecurrenceRuleSchema,
+    recurrenceCron: z.string().optional(),
+    recurrenceTimezone: z.string().optional(),
+  })
+  .superRefine((val, ctx) => {
+    if (val.recurrenceRule === "custom" && !val.recurrenceCron) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "recurrenceCron is required for custom recurrence rule",
+        path: ["recurrenceCron"],
+      });
+    }
+  });
 
 const WebhookSubscriptionSchema = z.object({
   url: z.string().url("url must be a valid URL"),
@@ -675,9 +709,7 @@ router.post(
     const parsed = ChallengeTemplateSchema.safeParse(req.body);
     if (!parsed.success) {
       throw createError(
-        parsed.error.issues
-          .map((i) => `${i.path.join(".") || "body"}: ${i.message}`)
-          .join("; "),
+        parsed.error.issues.map((i) => `${i.path.join(".") || "body"}: ${i.message}`).join("; "),
         422,
         "VALIDATION_ERROR"
       );
@@ -718,27 +750,17 @@ router.get("/:id/challenge-templates", authenticate, async (req, res) => {
  * Preview upcoming auto-generated challenges (start/end times and pools)
  * derived from active templates.
  */
-router.get(
-  "/:id/challenge-templates/upcoming",
-  authenticate,
-  async (req, res) => {
-    const brand = await getBrandById(req.params.id);
-    if (!brand) throw createError("Brand not found", 404);
-    if (brand.owner_user_id !== req.user!.sub && req.user!.role !== "admin") {
-      throw createError("Forbidden", 403);
-    }
-
-    const limit = Math.min(
-      20,
-      Math.max(1, parseInt(String(req.query.limit ?? "5"), 10) || 5)
-    );
-    const upcoming = await getUpcomingChallengesFromTemplatesByBrandId(
-      brand.id,
-      limit
-    );
-    res.json({ upcoming });
+router.get("/:id/challenge-templates/upcoming", authenticate, async (req, res) => {
+  const brand = await getBrandById(req.params.id);
+  if (!brand) throw createError("Brand not found", 404);
+  if (brand.owner_user_id !== req.user!.sub && req.user!.role !== "admin") {
+    throw createError("Forbidden", 403);
   }
-);
+
+  const limit = Math.min(20, Math.max(1, parseInt(String(req.query.limit ?? "5"), 10) || 5));
+  const upcoming = await getUpcomingChallengesFromTemplatesByBrandId(brand.id, limit);
+  res.json({ upcoming });
+});
 
 /**
  * PATCH /brands/challenge-templates/:templateId/pause
