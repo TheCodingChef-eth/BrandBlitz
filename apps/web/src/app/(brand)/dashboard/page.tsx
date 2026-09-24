@@ -12,6 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { formatUsdc } from "@/lib/format";
 import { EmptyState } from "@/components/ui/empty-state";
 import { toast } from "@/lib/toast";
+import { BenchmarkPanel } from "./benchmark-panel";
+import { EscrowPanel } from "./escrow-panel";
 
 interface ChallengeStats {
   total_sessions: number;
@@ -127,10 +129,16 @@ export default function DashboardPage() {
             Manage your brand kits and challenges
           </p>
           <div className="mt-2 flex gap-4 text-xs text-[var(--muted-foreground)]">
-            <Link href="/docs/guides/question-review-workflow" className="underline hover:text-[var(--foreground)]">
+            <Link
+              href="/docs/guides/question-review-workflow"
+              className="underline hover:text-[var(--foreground)]"
+            >
               Review questions guide
             </Link>
-            <Link href="/docs/guides/funding-a-challenge" className="underline hover:text-[var(--foreground)]">
+            <Link
+              href="/docs/guides/funding-a-challenge"
+              className="underline hover:text-[var(--foreground)]"
+            >
               Funding guide
             </Link>
           </div>
@@ -307,6 +315,16 @@ export default function DashboardPage() {
                   </div>
                 </CardContent>
               )}
+
+              <EscrowPanel
+                brandId={brand.id}
+                challenges={brand.challenges ?? []}
+                apiToken={apiToken}
+              />
+
+              <CardContent>
+                <BenchmarkPanel brandId={brand.id} apiToken={apiToken} />
+              </CardContent>
             </Card>
           ))}
         </div>
@@ -314,4 +332,3 @@ export default function DashboardPage() {
     </main>
   );
 }
-
